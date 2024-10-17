@@ -1,98 +1,102 @@
-setwd("D:/R/KEGG富集分析")
+# Set working directory ------------------------------------------------------
+setwd("D:/R/KEGG_enrichment_analysis")
 
-# 下载所需要的R包 ----------------------------------------------------------------
+# Load required R packages --------------------------------------------------
 if (!require("BiocManager", quietly = TRUE))
   install.packages("BiocManager")
-# 检查 clusterProfiler 包是否已经安装
+# Check if the clusterProfiler package is installed
 if (!require("clusterProfiler", quietly = TRUE)) {
-  # 如果未安装，则使用 BiocManager 安装
+  # If not installed, use BiocManager to install
   if (!requireNamespace("BiocManager", quietly = TRUE))
     install.packages("BiocManager")
   BiocManager::install("clusterProfiler")
 }
-# 检查 org.Hs.eg.db 包是否已经安装
+# Check if the org.Hs.eg.db package is installed
 if (!require("org.Hs.eg.db", quietly = TRUE)) {
-  # 如果未安装，则使用 BiocManager 安装
+  # If not installed, use BiocManager to install
   if (!requireNamespace("BiocManager", quietly = TRUE))
     install.packages("BiocManager")
   BiocManager::install("org.Hs.eg.db")
 }
-# 检查 ggplot2 包是否已经安装
+# Check if the ggplot2 package is installed
 if (!require("ggplot2", quietly = TRUE)) {
-  # 如果未安装，则使用 install.packages 函数安装
+  # If not installed, use install.packages to install
   install.packages("ggplot2")
 }
-# 检查 dplyr 包是否已经安装
+# Check if the dplyr package is installed
 if (!require("dplyr", quietly = TRUE)) {
-  # 如果未安装，则使用 install.packages 函数安装
+  # If not installed, use install.packages to install
   install.packages("dplyr")
 }
-# 检查 ggsci 包是否已经安装
+# Check if the ggsci package is installed
 if (!require("ggsci", quietly = TRUE)) {
-  # 如果未安装，则使用 install.packages 函数安装
+  # If not installed, use install.packages to install
   install.packages("ggsci")
 }
-# 加载所需要的R包 ----------------------------------------------------------------
-library(clusterProfiler) #富集分析主要的包
-library(org.Hs.eg.db)#查找物种注释信息
-library(ggplot2)#绘图所需
-library(dplyr)#整理数据
+# Load required R packages --------------------------------------------------
+library(clusterProfiler) # Main package for enrichment analysis
+library(org.Hs.eg.db)    # For species annotation information
+library(ggplot2)         # For plotting
+library(dplyr)           # For data manipulation
 
-# 读取数据：基因差异分析的结果 ----------------------------------------------------------
-upGene <- read.csv("upGene_1_0.05.csv",row.names = 1)
+# Read data: results of differential analysis --------------------------------
+upGene <- read.csv("upGene_1_0.05.csv", row.names = 1)
 Genes <- bitr(rownames(upGene),  
-              fromType = "SYMBOL", #输入数据的类型
-              toType = c("ENTREZID"), #要转换的数据类型
-              OrgDb = org.Hs.eg.db) #物种
+              fromType = "SYMBOL", # Input data type
+              toType = c("ENTREZID"), # Target data type
+              OrgDb = org.Hs.eg.db) # Species
 
-# KEGG富集分析 ----------------------------------------------------------------
+# KEGG enrichment analysis ---------------------------------------------------
 KEGG <- enrichKEGG(gene = Genes$ENTREZID,
                    organism = "hsa", 
-                   keyType = "kegg", #KEGG数据库
+                   keyType = "kegg", # KEGG database
                    pAdjustMethod = "BH",
                    pvalueCutoff = 1,
                    qvalueCutoff = 1)
 
+# Bar plot of KEGG enrichment results
 barplot(KEGG,
         x = "GeneRatio",
         color = "p.adjust",
         showCategory = 10,
-        title = "KEGG_enrichment")#标题
+        title = "KEGG_enrichment") # Title
+
+# Dot plot of KEGG enrichment results
 dotplot(KEGG)
 
-
-# 问题所在：KEGG数据库API更新了 Y叔的clusterProfiler包也需要更新-----------------------------------------------
-#解决办法就是卸载掉富集分析所用的clusterProfiler包，再安装最新版本的
+# Issue: The KEGG database API has been updated, and Y's clusterProfiler package needs to be updated ----------------------
+# Solution: Uninstall the clusterProfiler package used for enrichment analysis, then install the latest version
 .libPaths() 
-remove.packages("clusterProfiler",lib = file.path("你的R包安装路径"))
-remove.packages("BiocManager",lib = file.path("你的R包安装路径"))
-#重新安装相应的R包
+remove.packages("clusterProfiler", lib = file.path("your_R_package_installation_path"))
+remove.packages("BiocManager", lib = file.path("your_R_package_installation_path"))
+# Reinstall the necessary R packages
 if (!require("BiocManager", quietly = TRUE))
   install.packages("BiocManager")
 BiocManager::install(version = "3.16")
 BiocManager::install("clusterProfiler")
 
-#假如依然不行，可能是你的R版本太旧了
+# If it still doesn't work, your R version may be too old
 install.packages("installr")
 library(installr)
 updateR()
-#更新过程中，记得选择把旧版本的R包转移到新版本
+# During the update, remember to select to transfer the old version of R packages to the new version
 
-# 美化版本 --------------------------------------------------------------------
+# Beautified version -----------------------------------------------------------
 df <- as.data.frame(KEGG)
 
-# 气泡图 ---------------------------------------------------------------------
-# 排序并选择最显著的 10 个条目
+# Bubble plot ---------------------------------------------------------------
+# Sort and select the top 10 most significant entries
 df_sorted <- df[order(df$p.adjust), ][1:10, ]
 colnames(df_sorted)
 df_sorted$Description
 df_sorted$Description <- gsub(" - Homo sapiens \\(human\\)", "", df_sorted$Description)
-###
-ggplot(df_sorted, aes(x=GeneRatio, y=Description, size=-log10(p.adjust), color=p.adjust)) + ## 生成散点图，以GeneRatio为x轴，Description为y轴，-log10(p.adjust)为点的大小，p.adjust为点的颜色
-  geom_point(alpha=0.7) + # 绘制散点图层，设置透明度为0.7
-  scale_color_gradient(low="blue", high="red") +
-  labs(title="The most enrichment KEGG pathway", x="GeneRatio", y="KEGG pathway", size="-log10(P-value)", color="P-value") + #设置颜色映射为渐变色，低值为蓝色，高值为红色
-  theme_minimal() + #设置图表的标题、x轴和y轴标签，以及点的大小和颜色的图例标签
-  theme(axis.text.y = element_text(face = 'bold',size = 15),
+
+# Generate scatter plot
+ggplot(df_sorted, aes(x = GeneRatio, y = Description, size = -log10(p.adjust), color = p.adjust)) +
+  geom_point(alpha = 0.7) + # Add scatter plot layer with transparency
+  scale_color_gradient(low = "blue", high = "red") +
+  labs(title = "The most enrichment KEGG pathway", x = "GeneRatio", y = "KEGG pathway", size = "-log10(P-value)", color = "P-value") + 
+  theme_minimal() + # Set the theme to minimal
+  theme(axis.text.y = element_text(face = 'bold', size = 15),
         axis.title = element_text(size = 15),
-        plot.title = element_text(size = 18, face = "bold")) #设置主题为最小化主题，调整y轴的文本大小和字体粗细，以及标题、轴标签的字体大小
+        plot.title = element_text(size = 18, face = "bold")) # Adjust text sizes

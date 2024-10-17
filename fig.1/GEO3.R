@@ -1,78 +1,83 @@
-setwd("D:/R/GEO注释")
+setwd("D:/R/GEO_Annotations")  # Set working directory
 
-# 下载所需要的R包 ----------------------------------------------------------------
-# 检查 tidyverse 包是否已经安装
+# Install required R packages ------------------------------------------------
+# Check if the 'tidyverse' package is installed
 if (!require("tidyverse", quietly = TRUE)) {
-  # 如果未安装，则使用 install.packages 函数安装
+  # If not installed, use the install.packages function to install it
   install.packages("tidyverse")
 }
 
-# 检查 GEOquery 包是否已经安装
+# Check if the 'GEOquery' package is installed
 if (!require("GEOquery", quietly = TRUE)) {
-  # 如果未安装，则使用 BiocManager 安装
+  # If not installed, install it using BiocManager
   BiocManager::install("GEOquery")
 }
 
-# 检查 ggVennDiagram 包是否已经安装
+# Check if the 'ggVennDiagram' package is installed
 if (!require("ggVennDiagram", quietly = TRUE)) {
-  # 如果未安装，则使用 install.packages 函数安装
+  # If not installed, use the install.packages function to install it
   install.packages("ggVennDiagram")
 }
 
-# 加载所需要的R包 ----------------------------------------------------------------
-library(GEOquery) # 数据下载
-library(tidyverse) # 数据清洗
-library(ggVennDiagram) # 绘制venn图，交集可视化
+# Load required R packages ---------------------------------------------------
+library(GEOquery)  # For data download
+library(tidyverse)  # For data cleaning
+library(ggVennDiagram)  # For drawing Venn diagrams and visualizing intersections
 
-# 下载示例数据 ------------------------------------------------------------------
-# ①表达矩阵
-# 从GEO数据库下载GSE138043基因表达数据集 
-eset = getGEO('GSE138043', destdir=".", AnnotGPL = F, getGPL = F)  
+# Download sample data -------------------------------------------------------
+# 1. Expression matrix
+# Download the GSE138043 gene expression dataset from GEO
+eset <- getGEO('GSE138043', destdir = ".", AnnotGPL = FALSE, getGPL = FALSE)  
 
-eset <- eset[[1]] # 选择第一个样本数据集
-probes_expr <- exprs(eset) # 获得该数据集的基因表达矩阵 probes_expr  
-dim(probes_expr)  # 查看基因表达矩阵的维度 
-data_use <- as.data.frame(probes_expr) # 将基因表达矩阵转换为数据框data_use 
+eset <- eset[[1]]  # Select the first sample dataset
+probes_expr <- exprs(eset)  # Get the gene expression matrix 'probes_expr'
+dim(probes_expr)  # Check the dimensions of the gene expression matrix
+data_use <- as.data.frame(probes_expr)  # Convert the gene expression matrix to a data frame 'data_use'
 
-# ②注释信息
-# 从GEO数据库下载平台GPL5175的注释信息ann_info
-ann_info <- getGEO(GEO = 'GPL5175',destdir = ".")
+# 2. Annotation information
+# Download platform GPL5175 annotation information from GEO
+ann_info <- getGEO(GEO = 'GPL5175', destdir = ".")
 
-anno_geoquery <- Table(ann_info) # 使用GEOquery包将ann_info转换为数据集anno_geoquery
-colnames(anno_geoquery)# 查看列名
-test <- anno_geoquery[c(1,11,15),c(1,10)]# 提取其中部分信息测试
+anno_geoquery <- Table(ann_info)  # Use the GEOquery package to convert 'ann_info' into the dataset 'anno_geoquery'
+colnames(anno_geoquery)  # View column names
+test <- anno_geoquery[c(1, 11, 15), c(1, 10)]  # Extract partial information for testing
 
+# Split annotation information (test) ----------------------------------------
+# Split the 'gene_assignment' column (keep all results)
+test_split_1 <- test %>% 
+  separate_rows(gene_assignment, sep = " /// ")  %>%  # Split the 'gene_assignment' column by "///" into new rows, and store the results in a new data frame 'split_df'
+  separate(gene_assignment, into = c("Ensembl_ID", "gene_symbol", 
+                                     "gene_description", "location", "ENTREZ_ID"), 
+           sep = " // ")  # Split the 'gene_assignment' column by "//" into five columns: 'Ensembl_ID', 'gene_symbol', 'gene_description', 'location', and 'ENTREZ_ID'
 
-# 拆分注释信息（测试） ------------------------------------------------------------------
-# 拆分 gene_assignment 列（保留所有结果）
-test_split_1 = test %>% 
-  separate_rows(gene_assignment, sep = " /// ")  %>%  # 将`test`数据框中的`gene_assignment`列按照"///"分隔符进行拆分，生成新的行，并将拆分后的结果存储为新的数据框`split_df`
-  separate(gene_assignment, into = c("Ensembl_ID", "gene_symbol", "gene_description", "location", "ENTREZ_ID"), sep = " // ") #将`gene_assignment`列按照"//"分隔符进行拆分，将拆分后的结果分别存储为`Ensembl_ID`、`gene_symbol`、`gene_description`、`location`、`ENTREZ_ID`五个列
+# Split the 'gene_assignment' column (keep only the first probe's corresponding gene symbol)
+test_split_2 <- test %>% 
+  separate_rows(gene_assignment, sep = " /// ")  %>%  
+  separate(gene_assignment, into = c("Ensembl_ID", "gene_symbol", 
+                                     "gene_description", "location", "ENTREZ_ID"), 
+           sep = " // ")  %>%  
+  distinct(ID, .keep_all = TRUE)  # Keep only the first occurrence of each unique ID
 
-# 拆分 gene_assignment 列（只保留第一个探针对应的Gene symbol）
-test_split_2 = test %>% 
-  separate_rows(gene_assignment, sep = " /// ")  %>%  #将`test`数据框中的`gene_assignment`列按照"///"分隔符进行拆分，生成新的行，并将拆分后的结果存储为新的数据框`split_df`
-  separate(gene_assignment, into = c("Ensembl_ID", "gene_symbol", "gene_description", "location", "ENTREZ_ID"), sep = " // ")  %>%  #将`gene_assignment`列按照"//"分隔符进行拆分，将拆分后的结果分别存储为`Ensembl_ID`、`gene_symbol`、`gene_description`、`location`、`ENTREZ_ID`五个列
-  distinct(ID, .keep_all = TRUE) 
-
-
-# 拆分注释信息（正式） --------------------------------------------------------------
-colnames(anno_geoquery)# 查看列名
-anno_info <- anno_geoquery[,c("ID","gene_assignment")]# 只选取芯片列、注释信息列
-anno_info <- anno_info[anno_info$gene_assignment != "---",]# 删除注释信息中的---
+# Split annotation information (final version) -------------------------------
+colnames(anno_geoquery)  # View column names
+anno_info <- anno_geoquery[, c("ID", "gene_assignment")]  # Select only the 'ID' and 'gene_assignment' columns
+anno_info <- anno_info[anno_info$gene_assignment != "---", ]  # Remove rows with '---' in 'gene_assignment'
 
 mydata <- anno_info %>%
-  separate_rows(gene_assignment, sep = " /// ") %>% #将`anno_info`数据框中的`gene_assignment`列按照"///"分隔符进行拆分，生成新的行，并将拆分后的结果存储为新的数据框`split_df`
-  separate(gene_assignment, into = c("Ensembl_ID", "gene_symbol", "gene_description", "location", "ENTREZ_ID"), sep = " // ") %>% #将`gene_assignment`列按照"//"分隔符进行拆分，将拆分后的结果分别存储为`Ensembl_ID`、`gene_symbol`、`gene_description`、`location`、`ENTREZ_ID`五个列
-  distinct(ID, .keep_all = TRUE) 
+  separate_rows(gene_assignment, sep = " /// ") %>%  
+  separate(gene_assignment, into = c("Ensembl_ID", "gene_symbol", 
+                                     "gene_description", "location", "ENTREZ_ID"), 
+           sep = " // ") %>%  
+  distinct(ID, .keep_all = TRUE)  # Keep only the first occurrence of each unique ID
 
-# 向量的交集
-intersect_array <- intersect(rownames(data_use), 
-                             mydata$ID)
-# 维恩图简单的可视化
-list_ID <-list('表达矩阵芯片' = rownames(data_use),
-               '注释信息芯片' = as.character(mydata$ID))
-ggVennDiagram(list_ID, label_alpha=0) + scale_fill_gradient(low="gray", high = "skyblue")
-# ggVennDiagram用于生成 Venn 径向图（radial Venn diagram）的函数，需要传入一个列表作为参数，
-# label_alpha = 0：是控制标签透明度的参数，将其设为 0 表示隐藏标签。
-# scale_fill_gradient调整 Venn 图填充颜色的函数，将低值的填充颜色设定为灰色，高值的填充颜色设定为天蓝色。
+# Find the intersection of vectors -------------------------------------------
+intersect_array <- intersect(rownames(data_use), mydata$ID)
+
+# Simple visualization of a Venn diagram -------------------------------------
+list_ID <- list('Expression Matrix Probes' = rownames(data_use),
+                'Annotation Probes' = as.character(mydata$ID))
+ggVennDiagram(list_ID, label_alpha = 0) + 
+  scale_fill_gradient(low = "gray", high = "skyblue")  
+# 'ggVennDiagram' generates a radial Venn diagram. It takes a list as input.
+# 'label_alpha = 0': Controls the transparency of the labels, setting it to 0 hides them.
+# 'scale_fill_gradient' adjusts the fill color of the Venn diagram, setting the low values to gray and high values to sky blue.

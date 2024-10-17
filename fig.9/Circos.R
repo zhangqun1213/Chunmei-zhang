@@ -1,166 +1,161 @@
-# 载入工作路径
-setwd("D:/R/GO富集圈图")
+# Set working directory ------------------------------------------------------
+setwd("D:/R/GO_Enrichment_Circle")
 
-
-# 下载所需要的R包 ----------------------------------------------------------------
-# 检查 GOplot 包是否已经安装
+# Load required R packages -------------------------------------------------
+# Check if the GOplot package is installed
 if (!require("GOplot", quietly = TRUE)) {
-  # 如果未安装，则使用 install.packages 函数安装
+  # If not installed, use install.packages to install
   install.packages("GOplot")
 }
 
 if (!require("BiocManager", quietly = TRUE))
   install.packages("BiocManager")
-# 检查 clusterProfiler 包是否已经安装
+
+# Check if the clusterProfiler package is installed
 if (!require("clusterProfiler", quietly = TRUE)) {
-  # 如果未安装，则使用 BiocManager 安装
+  # If not installed, use BiocManager to install
   BiocManager::install("clusterProfiler")
 }
-# 检查 org.Hs.eg.db 包是否已经安装
+
+# Check if the org.Hs.eg.db package is installed
 if (!require("org.Hs.eg.db", quietly = TRUE)) {
-  # 如果未安装，则使用 BiocManager 安装
+  # If not installed, use BiocManager to install
   BiocManager::install("org.Hs.eg.db")
 }
 
-# 加载R包 --------------------------------------------------------------------
-library(clusterProfiler) #富集分析主要的包
-library(org.Hs.eg.db)#查找物种注释信息
-library(GOplot)#可视化
+# Load R packages -----------------------------------------------------------
+library(clusterProfiler) # Main package for enrichment analysis
+library(org.Hs.eg.db) # For species annotation information
+library(GOplot) # For visualization
 
-# 导入差异分析的结果 ---------------------------------------------------------------
-DEG <- read.table("DEG_result.txt",header = T)
+# Import differential analysis results ---------------------------------------
+DEG <- read.table("DEG_result.txt", header = TRUE)
 
-Threshold <- 0.0005 #设定阈值
+Threshold <- 0.0005 # Set threshold
 
-DEG_use <- DEG[DEG$adj.P.Val < Threshold,] #过滤步骤
+DEG_use <- DEG[DEG$adj.P.Val < Threshold, ] # Filtering step
 
-colnames(DEG_use) # 查看列名，下方选择列的依据
-colnames(DEG_use)[1] <- "SYMBOL"# 修改列名，为下一步合并做准备
-DEG_use <- DEG_use[,c("SYMBOL","logFC")] #只要基因名称和差异倍数两列
+colnames(DEG_use) # View column names, basis for selecting columns below
+colnames(DEG_use)[1] <- "SYMBOL" # Rename column for merging
+DEG_use <- DEG_use[, c("SYMBOL", "logFC")] # Keep only gene names and log fold change columns
 
-
-
-
-# 读取数据：基因差异分析的结果 ----------------------------------------------------------
+# Read data: results of gene differential analysis ---------------------------
 Genes <- bitr(DEG_use$SYMBOL,  
-              fromType = "SYMBOL", #输入数据的类型
-              toType = c("ENTREZID"), #要转换的数据类型
-              OrgDb = org.Hs.eg.db) #物种
+              fromType = "SYMBOL", # Input data type
+              toType = c("ENTREZID"), # Type of data to convert
+              OrgDb = org.Hs.eg.db) # Species database
 
-data_use <- merge(DEG_use,Genes,by = "SYMBOL") #按照SYMBOL列合并数据，删除没有匹配到ENTREZID的基因行
+data_use <- merge(DEG_use, Genes, by = "SYMBOL") # Merge data by SYMBOL column, remove genes without matching ENTREZID
 
-# GO富集分析与整理 -------------------------------------------------------------
-GO <- enrichGO(gene = data_use$ENTREZID, # 输入基因的 ENTREZID
-               OrgDb = org.Hs.eg.db, # 注释信息来自 org.Hs.eg.db 数据库
-               keyType = "ENTREZID", # 指定使用的基因标识符类型
-               ont = "all", # 本次富集分析所使用的本体类型: "BP" (生物学过程)、"CC" (细胞组分)、"MF" (分子功能) 或 "all"（所有三个）
-               pAdjustMethod = "BH", # 用于多重检验校正的 p 值校正方法 (Benjamini-Hochberg 方法)
-               pvalueCutoff = 1, # p 值的阈值 (p 值低于此阈值的基因将被视为显著)
-               qvalueCutoff = 1, # q 值的阈值 (q 值低于此阈值的基因将被视为显著)
-               minGSSize = 5, # 基因集的最小大小 (基因的数量)
-               maxGSSize = 5000, # 基因集的最大大小
-               readable = TRUE) # 是否将 ENTREZID 转换为基因符号以提高可读性
+# GO enrichment analysis and organization -----------------------------------
+GO <- enrichGO(gene = data_use$ENTREZID, # Input genes' ENTREZID
+               OrgDb = org.Hs.eg.db, # Annotation information from org.Hs.eg.db database
+               keyType = "ENTREZID", # Specify the gene identifier type to use
+               ont = "all", # Type of ontology for enrichment analysis: "BP" (Biological Process), "CC" (Cell Component), "MF" (Molecular Function) or "all" (all three)
+               pAdjustMethod = "BH", # p-value adjustment method for multiple tests (Benjamini-Hochberg method)
+               pvalueCutoff = 1, # Threshold for p-value (genes below this threshold will be considered significant)
+               qvalueCutoff = 1, # Threshold for q-value (q-value below this threshold will be considered significant)
+               minGSSize = 5, # Minimum size of gene sets (number of genes)
+               maxGSSize = 5000, # Maximum size of gene sets
+               readable = TRUE) # Whether to convert ENTREZID to gene symbols for better readability
 
-
-# 将 GO 结果转换为数据框格式
+# Convert GO results to data frame format
 GO_result <- as.data.frame(GO) 
-# 选择显著富集功能通路，根据给定的阈值（Threshold）
-GO_result <- GO_result[(GO_result$pvalue < 0.05 & GO_result$p.adjust < 0.05),] 
-# 创建一个数据框，包含富集分析结果的GO类型
+# Select significantly enriched pathways based on given threshold (Threshold)
+GO_result <- GO_result[(GO_result$pvalue < 0.05 & GO_result$p.adjust < 0.05), ] 
+# Create a data frame containing the GO enrichment analysis results
 go_result <- data.frame(Category = GO_result$ONTOLOGY, 
-                        ID = GO_result$ID, # 包含富集分析结果的通路 ID
-                        Term = GO_result$Description, # 包含富集分析结果的通路描述
-                        Genes = gsub("/", ", ", GO_result$geneID), # 包含富集分析结果中的基因 ID，多个 ID 用逗号分隔
-                        adj_pval = GO_result$p.adjust) # 包含富集分析结果中校正后的 p 值
-# 创建一个包含基因 ID 和差异表达值的数据框
+                        ID = GO_result$ID, # Pathway ID in the enrichment analysis results
+                        Term = GO_result$Description, # Pathway description in the enrichment analysis results
+                        Genes = gsub("/", ", ", GO_result$geneID), # Genes in the enrichment results, multiple IDs separated by commas
+                        adj_pval = GO_result$p.adjust) # Adjusted p-value in the enrichment analysis results
+# Create a data frame containing gene IDs and differential expression values
 genelist <- data.frame(ID = data_use$SYMBOL, logFC = data_use$logFC) 
-# 将 genelist 数据框的行名设置为 ID
-row.names(genelist)=genelist[,1] 
-# 生成一个通路富集分析结果的可视化图表
+# Set the row names of the genelist data frame to ID
+row.names(genelist) = genelist[, 1] 
+# Generate a visualization chart for pathway enrichment analysis results
 circ <- circle_dat(go_result, genelist) 
 head(circ)
 
-# 可视化准备及绘图 ----------------------------------------------------------------
-nrow(go_result) #查看一共有多少条通路
-term_num = 3 # 设定图中要展示的GO的条目数量  
+# Visualization preparation and plotting --------------------------------------
+nrow(go_result) # Check how many pathways are there
+term_num = 3 # Set the number of GO entries to display in the chart  
 
-nrow(genelist) #查看一共有多少个基因
-gene_num = nrow(genelist)  # 设定图中要展示的基因数量上限 
+nrow(genelist) # Check how many genes there are
+gene_num = nrow(genelist)  # Set the maximum number of genes to display in the chart 
 
-# 生成一个通路富集分析结果的和弦图表
-chord <- chord_dat(circ, #一个包含通路富集分析结果的数据框
-                   genelist[1:gene_num,], #一个包含基因 ID 和差异表达值的数据框，其中只包含前 gene_num 个基因
-                   go_result$Term[1:term_num] # 一个包含通路描述的向量，其中只包含前 term_num 个通路
-                   )
+# Generate a chord diagram for the pathway enrichment analysis results
+chord <- chord_dat(circ, # A data frame containing the pathway enrichment analysis results
+                   genelist[1:gene_num, ], # A data frame containing gene IDs and differential expression values, only the top gene_num genes
+                   go_result$Term[1:term_num] # A vector containing pathway descriptions, only the top term_num pathways
+)
 
-#开始绘图（生成PDF清晰度更高）
+# Start plotting (generate PDF for higher clarity)
 
-# 一、GO富集圈图
-pdf(file="GO富集圈图.pdf",width = 12,height = 12)
+# 1. GO enrichment chord diagram
+pdf(file = "GO_Enrichment_Circle.pdf", width = 12, height = 12)
 GOChord(chord, 
         title = "GOcircos",
-        # 标题
+        # Title
         space = 0.01,
-        # 设置基因之间的间距为0.01
+        # Set spacing between genes to 0.01
         gene.order = 'logFC',    
-        # 根据logFC的值对基因进行排序
+        # Order genes by logFC value
         gene.size = 2,
-        # 基因标签的大小
+        # Size of gene labels
         nlfc = 1,
-        # 定义logFC列数（默认值=1）
-        lfc.col=c('#F5053C','#EDF5F7','cyan1'),
-        # 指定的logFC的填充颜色：c（低值的颜色，中点的颜色，高值的颜色）
+        # Define the number of logFC columns (default = 1)
+        lfc.col = c('#F5053C', '#EDF5F7', 'cyan1'),
+        # Fill colors for logFC: c (low value color, midpoint color, high value color)
         lfc.min = -3,
-        # 指定logFC比例的最小值（默认值= -3）
+        # Set minimum value for logFC ratio (default = -3)
         lfc.max = 3,
-        # 指定logFC比例的最大值（默认值= 3）
+        # Set maximum value for logFC ratio (default = 3)
         gene.space = 0.2,       
-        # 基因离圆圈距离
+        # Distance of genes from the circle
         border.size = 0.2,  
-        # 定义功能区边框的大小
+        # Size of the functional area border
         process.label = 12,
-        # 图例的大小
-        limit = c(1,5)
-        # 控制着和弦图中GO条目与基因的数量,限制输出过多或过少的关系,保证可视化效果清晰易读。
-        # 第一个值为1,表示每个基因至少被分配一个GO条目
-        # 第二个值为5,表示每个展示的GO条目至少关联5个基因。
-        )       
+        # Size of the legend
+        limit = c(1, 5)
+        # Control the number of GO entries and genes in the chord diagram, limit excessive or insufficient relationships, ensuring clear and readable visualization.
+        # The first value is 1, meaning each gene must be assigned at least one GO entry
+        # The second value is 5, meaning each displayed GO entry must be associated with at least 5 genes.
+)       
 dev.off()
 
-# 二、GO圆形树状图
-pdf(file="GO圆形树状图.pdf",width = 10,height = 8)
+# 2. GO circular dendrogram
+pdf(file = "GO_Circular_Dendrogram.pdf", width = 10, height = 8)
 GOCluster(circ, 
           metric = "euclidean",
-          # 设置距离度量方法为欧氏距离
-           clust.by='logFC',
-          # 根据logFC值进行聚类
-          lfc.col=c('#F5053C','#EDF5F7','cyan1'),
-          # 指定的logFC的填充颜色：c（低值的颜色，中点的颜色，高值的颜色）
-          as.character(go_result[1:term_num,3])
-          # 选择go_result中的前termNum个GO术语
-          )
+          # Set distance metric to Euclidean
+          clust.by = 'logFC',
+          # Cluster based on logFC values
+          lfc.col = c('#F5053C', '#EDF5F7', 'cyan1'),
+          # Fill colors for logFC: c (low value color, midpoint color, high value color)
+          as.character(go_result[1:term_num, 3])
+          # Select the top term_num GO terms from go_result
+)
 dev.off()
 
-# 三、太极图
-GOCircle(circ,nsub = 8)
+# 3. Tai Chi plot
+GOCircle(circ, nsub = 8)
 
 go_result$ID[1:20]
 Select_GO_Term <- c('GO:0042113',
-                    'GO:0042100',
-                    'GO:0048731',
-                    'GO:0030183',
-                    'GO:0003341')
-GOCircle(circ,nsub = Select_GO_Term)
-# - 最外面显示GO条目,外圈表示基因（上调/下调）
+                     'GO:0042100',
+                     'GO:0048731',
+                     'GO:0030183',
+                     'GO:0003341')
+GOCircle(circ, nsub = Select_GO_Term)
+# - The outermost shows GO entries, the outer circle represents genes (upregulated/downregulated)
 
-# 四、气泡图
+# 4. Bubble plot
 GOBubble(circ,
-         labels = 9,#图中标签（GO：...）显示的阈值，对-log（p.adj）>6的term进行标注，数值越大，显示越少
-         display = 'multiple',#在同一图上展示多个变量的气泡
-         colour = c('#F5053C','#F9F871','cyan1'),#设置颜色
-         bg.col = T # 是否添加背景颜色
-         )
-GOBubble(circ
-         #,table.legend = F # 是否显示右侧GO具体条目
-         )
-#Z-score 的计算方式是通过基因在通路中的表达水平和通路中所有基因的表达水平的比较进行标准化。
+         labels = 9, # Threshold for labeling (GO:...) in the plot; terms with -log(p.adj) > 6 will be annotated, larger values show fewer displays
+         display = 'multiple', # Show bubbles for multiple variables on the same plot
+         colour = c('#F5053C', '#F9F871', 'cyan1'), # Set colors
+         bg.col = TRUE # Whether to add background color
+)
+GOBubble(circ)
+# The Z-score is calculated by normalizing the expression level of the gene in the pathway compared to the expression levels of all genes in the pathway.
